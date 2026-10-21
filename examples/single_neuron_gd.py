@@ -70,7 +70,7 @@ def single_neuron_demo():
         dw1 = dz1 * x_input
         db1 = dz1
 
-        print(f"Backward pass:")
+        print("Backward pass:")
         print(f"  dz3 = {y_pred:.4f} - {y_true} = {dz3:.4f}")
         print(f"  dw3 = {dz3:.4f} * {a2:.4f} = {dw3:.4f}")
         print(f"  db3 = {db3:.4f}")

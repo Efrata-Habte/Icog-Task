@@ -1,15 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from neural_network import NeuralNetwork
-from losses import Loss_CategoricalCrossentropy
-from optimizer import Optimizer_Adam, Optimizer_SGD
-from data import create_spiral_data, load_dry_bean
-from train import train_mini_batch, evaluate
-from visualize import (create_figures_dir, plot_training_curves,
+from drybean.neural_network import NeuralNetwork
+from drybean.losses import Loss_CategoricalCrossentropy
+from drybean.optimizer import Optimizer_Adam, Optimizer_SGD
+from drybean.data import load_dry_bean
+from examples.spiral import create_spiral_data
+from drybean.train import train_mini_batch, evaluate
+from dashboard.visualize import (create_figures_dir, plot_training_curves,
                            plot_confusion_matrix, plot_spiral_decision_boundary,
                            plot_architecture_diagram, plot_weight_heatmap)
-from weights import save_weights, get_layer_weights
-from predictions import print_predictions_table, per_class_metrics
+from drybean.weights import save_weights, get_layer_weights
+from drybean.predictions import print_predictions_table, per_class_metrics
+from pathlib import Path
+
+DATA_PATH = str(Path(__file__).resolve().parent.parent / 'data' / 'Dry_Bean_Dataset.xlsx')
 
 np.random.seed(42)
 
@@ -54,7 +58,7 @@ print("DRY BEAN DATASET TRAINING")
 print("=" * 60)
 
 try:
-    X_train, X_val, X_test, y_train, y_val, y_test, class_names = load_dry_bean('data/Dry_Bean_Dataset.xlsx')
+    X_train, X_val, X_test, y_train, y_val, y_test, class_names = load_dry_bean(DATA_PATH)
 
     print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
     print(f"Classes: {len(class_names)}")

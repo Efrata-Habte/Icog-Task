@@ -8,10 +8,18 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
-from neural_network import NeuralNetwork
-from losses import Loss_CategoricalCrossentropy
-from optimizer import Optimizer_Adam
-from data import create_spiral_data, load_dry_bean
+from drybean.neural_network import NeuralNetwork
+from drybean.losses import Loss_CategoricalCrossentropy
+from drybean.optimizer import Optimizer_Adam
+from drybean.data import load_dry_bean
+from drybean.train import train_mini_batch
+from examples.spiral import create_spiral_data
+from pathlib import Path
+
+DATA_PATH = str(Path(__file__).resolve().parent.parent / 'data' / 'Dry_Bean_Dataset.xlsx')
+
+# 1000 points per class: with only 100 the network memorizes noise (train-test gap of ~9 points)
+SPIRAL_TRAIN_SAMPLES = 1000
 
 app = Flask(__name__)
 
@@ -954,58 +962,43 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+def _line_plot(title, ylabel, epochs_arr, series):
+    fig = go.Figure()
+    for name, values, color in series:
+        fig.add_trace(go.Scatter(x=epochs_arr, y=values, mode='lines', name=name, line=dict(color=color, width=3)))
+    fig.update_layout(title=title, xaxis_title='Epoch', yaxis_title=ylabel, height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
+    return json.dumps(fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
+
+SPLIT_STYLE = [('train', 'Train', '#d4af37'), ('val', 'Val', '#888888'), ('test', 'Test', '#4fc3f7')]
+
 @app.route('/training_progress/<dataset>', methods=['GET'])
 def get_training_progress(dataset):
+    empty = {'loss_plot': None, 'acc_plot': None, 'is_training': False, 'current_epoch': 0}
     if dataset not in training_state:
-        return jsonify({'loss_plot': None, 'acc_plot': None, 'is_training': False, 'current_epoch': 0})
+        return jsonify(empty)
 
     state = training_state[dataset]
-    if state['history'] is None or len(state['history'].get('loss', state['history'].get('train_loss', []))) == 0:
-        return jsonify({'loss_plot': None, 'acc_plot': None, 'is_training': state['is_training'], 'current_epoch': 0})
-
     history = state['history']
-    loss_plot = None
-    acc_plot = None
+    if not history:
+        return jsonify(dict(empty, is_training=state['is_training']))
 
-    if dataset == 'spiral':
-        if len(history['loss']) > 0:
-            epochs_arr = list(range(len(history['loss'])))
-            loss_fig = go.Figure()
-            loss_fig.add_trace(go.Scatter(x=epochs_arr, y=history['loss'], mode='lines', name='Train', line=dict(color='#d4af37', width=3)))
-            loss_fig.add_trace(go.Scatter(x=epochs_arr, y=history['test_loss'], mode='lines', name='Test', line=dict(color='#888888', width=3)))
-            loss_fig.update_layout(title='Training Loss', xaxis_title='Epoch', yaxis_title='Loss', height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
-            loss_plot = json.dumps(loss_fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
+    # training runs in another request and appends to these lists, so only use complete epochs
+    current_epoch = min(len(v) for v in history.values())
+    if current_epoch == 0:
+        return jsonify(dict(empty, is_training=state['is_training']))
 
-            acc_fig = go.Figure()
-            acc_fig.add_trace(go.Scatter(x=epochs_arr, y=history['acc'], mode='lines', name='Train', line=dict(color='#d4af37', width=3)))
-            acc_fig.add_trace(go.Scatter(x=epochs_arr, y=history['test_acc'], mode='lines', name='Test', line=dict(color='#888888', width=3)))
-            acc_fig.update_layout(title='Training Accuracy', xaxis_title='Epoch', yaxis_title='Accuracy', height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
-            acc_plot = json.dumps(acc_fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
-    else:
-        if len(history['train_loss']) > 0:
-            epochs_arr = list(range(len(history['train_loss'])))
-            loss_fig = go.Figure()
-            loss_fig.add_trace(go.Scatter(x=epochs_arr, y=history['train_loss'], mode='lines', name='Train', line=dict(color='#d4af37', width=3)))
-            loss_fig.add_trace(go.Scatter(x=epochs_arr, y=history['val_loss'], mode='lines', name='Val', line=dict(color='#888888', width=3)))
-            loss_fig.add_trace(go.Scatter(x=epochs_arr, y=history['test_loss'], mode='lines', name='Test', line=dict(color='#4fc3f7', width=3)))
-            loss_fig.update_layout(title='Loss', xaxis_title='Epoch', yaxis_title='Loss', height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
-            loss_plot = json.dumps(loss_fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
+    epochs_arr = list(range(current_epoch))
+    splits = [s for s in SPLIT_STYLE if s[0] + '_loss' in history]
+    loss_plot = _line_plot('Loss', 'Loss', epochs_arr, [(label, history[key + '_loss'][:current_epoch], color) for key, label, color in splits])
+    acc_plot = _line_plot('Accuracy', 'Accuracy', epochs_arr, [(label, history[key + '_acc'][:current_epoch], color) for key, label, color in splits])
 
-            acc_fig = go.Figure()
-            acc_fig.add_trace(go.Scatter(x=epochs_arr, y=history['train_acc'], mode='lines', name='Train', line=dict(color='#d4af37', width=3)))
-            acc_fig.add_trace(go.Scatter(x=epochs_arr, y=history['val_acc'], mode='lines', name='Val', line=dict(color='#888888', width=3)))
-            acc_fig.add_trace(go.Scatter(x=epochs_arr, y=history['test_acc'], mode='lines', name='Test', line=dict(color='#4fc3f7', width=3)))
-            acc_fig.update_layout(title='Accuracy', xaxis_title='Epoch', yaxis_title='Accuracy', height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
-            acc_plot = json.dumps(acc_fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
+    metrics = {'epoch': current_epoch}
+    for key in ('train', 'val', 'test'):
+        if key + '_loss' in history:
+            prefix = '' if key == 'train' else key + '_'
+            metrics[prefix + 'loss'] = history[key + '_loss'][current_epoch - 1]
+            metrics[prefix + 'acc'] = history[key + '_acc'][current_epoch - 1]
 
-    current_epoch = len(history.get('loss', history.get('train_loss', [])))
-    if dataset == 'spiral':
-        metrics = {'epoch': current_epoch, 'loss': float(history['loss'][-1]), 'acc': float(history['acc'][-1]),
-                   'test_loss': float(history['test_loss'][-1]), 'test_acc': float(history['test_acc'][-1])}
-    else:
-        metrics = {'epoch': current_epoch, 'loss': float(history['train_loss'][-1]), 'acc': float(history['train_acc'][-1]),
-                   'val_loss': float(history['val_loss'][-1]), 'val_acc': float(history['val_acc'][-1]),
-                   'test_loss': float(history['test_loss'][-1]), 'test_acc': float(history['test_acc'][-1])}
     return jsonify({
         'metrics': metrics,
         'loss_plot': loss_plot,
@@ -1024,14 +1017,14 @@ def train_spiral():
     epochs = int(params['epochs'])
 
     np.random.seed(42)
-    X, y = create_spiral_data(samples=100, classes=3)
+    X, y = create_spiral_data(samples=SPIRAL_TRAIN_SAMPLES, classes=3)
     X_test, y_test = create_spiral_data(samples=100, classes=3)
 
     model = NeuralNetwork(layer_sizes)
     optimizer = Optimizer_Adam(learning_rate=lr)
     loss_fn = Loss_CategoricalCrossentropy()
 
-    history = {'loss': [], 'acc': [], 'test_loss': [], 'test_acc': []}
+    history = {'train_loss': [], 'train_acc': [], 'test_loss': [], 'test_acc': []}
 
     training_state['spiral']['is_training'] = True
     training_state['spiral']['history'] = history
@@ -1039,41 +1032,12 @@ def train_spiral():
     training_state['spiral']['X'] = X
     training_state['spiral']['y'] = y
 
-    epoch = 0
-    while epoch < epochs:
-        indices = np.arange(X.shape[0])
-        np.random.shuffle(indices)
+    try:
+        train_mini_batch(model, optimizer, loss_fn, X, y, epochs=epochs, batch_size=32,
+                         X_test=X_test, y_test=y_test, history=history, verbose=False)
+    finally:
+        training_state['spiral']['is_training'] = False
 
-        batch_start = 0
-        while batch_start < X.shape[0]:
-            batch_end = min(batch_start + 32, X.shape[0])
-            batch_indices = indices[batch_start:batch_end]
-
-            X_batch = X[batch_indices]
-            y_batch = y[batch_indices]
-
-            y_pred = model.forward(X_batch)
-            model.backward(y_batch)
-            optimizer.update_params(model.layers)
-
-            batch_start = batch_end
-
-        y_pred_full = model.forward(X)
-        loss = loss_fn.calculate(y_pred_full, y)
-        acc = np.mean(np.argmax(y_pred_full, axis=1) == y)
-
-        y_pred_test = model.forward(X_test)
-        test_loss = loss_fn.calculate(y_pred_test, y_test)
-        test_acc = np.mean(np.argmax(y_pred_test, axis=1) == y_test)
-
-        history['loss'].append(float(loss))
-        history['acc'].append(float(acc))
-        history['test_loss'].append(float(test_loss))
-        history['test_acc'].append(float(test_acc))
-
-        epoch = epoch + 1
-
-    training_state['spiral']['is_training'] = False
 
     arch_img = plot_architecture(layer_sizes)
     boundary_img = plot_decision_boundary(model, X, y)
@@ -1102,7 +1066,7 @@ def train_bean():
     training_state['bean']['history'] = history
 
     try:
-        X_train, X_val, X_test, y_train, y_val, y_test, class_names = load_dry_bean('data/Dry_Bean_Dataset.xlsx')
+        X_train, X_val, X_test, y_train, y_val, y_test, class_names = load_dry_bean(DATA_PATH)
     except:
         training_state['bean']['is_training'] = False
         return jsonify({'error': 'Dataset not found'}), 400
@@ -1115,47 +1079,12 @@ def train_bean():
     training_state['bean']['X_val'] = X_val
     training_state['bean']['y_val'] = y_val
 
-    epoch = 0
-    while epoch < 50:
-        indices = np.arange(X_train.shape[0])
-        np.random.shuffle(indices)
-
-        batch_start = 0
-        while batch_start < X_train.shape[0]:
-            batch_end = min(batch_start + 64, X_train.shape[0])
-            batch_indices = indices[batch_start:batch_end]
-
-            X_batch = X_train[batch_indices]
-            y_batch = y_train[batch_indices]
-
-            y_pred = model.forward(X_batch)
-            model.backward(y_batch)
-            optimizer.update_params(model.layers)
-
-            batch_start = batch_end
-
-        y_pred_train = model.forward(X_train)
-        train_loss = loss_fn.calculate(y_pred_train, y_train)
-        train_acc = np.mean(np.argmax(y_pred_train, axis=1) == y_train)
-
-        y_pred_val = model.forward(X_val)
-        val_loss = loss_fn.calculate(y_pred_val, y_val)
-        val_acc = np.mean(np.argmax(y_pred_val, axis=1) == y_val)
-
-        y_pred_test = model.forward(X_test)
-        test_loss = loss_fn.calculate(y_pred_test, y_test)
-        test_acc = np.mean(np.argmax(y_pred_test, axis=1) == y_test)
-
-        history['test_loss'].append(float(test_loss))
-        history['test_acc'].append(float(test_acc))
-        history['train_loss'].append(float(train_loss))
-        history['train_acc'].append(float(train_acc))
-        history['val_loss'].append(float(val_loss))
-        history['val_acc'].append(float(val_acc))
-
-        epoch = epoch + 1
-
-    training_state['bean']['is_training'] = False
+    try:
+        train_mini_batch(model, optimizer, loss_fn, X_train, y_train, X_val, y_val,
+                         epochs=50, batch_size=64, X_test=X_test, y_test=y_test,
+                         history=history, verbose=False)
+    finally:
+        training_state['bean']['is_training'] = False
 
     y_pred_test = model.forward(X_test)
     test_loss = loss_fn.calculate(y_pred_test, y_test)

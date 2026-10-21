@@ -6,6 +6,8 @@ def gradient_check(model, loss_fn, X, y, h=1e-5):
     loss_orig = loss_fn.calculate(y_pred, y)
     model.backward(y)
 
+    overall_max = 0.0
+
     print("\nGradient Check:")
     print("=" * 60)
 
@@ -51,6 +53,7 @@ def gradient_check(model, loss_fn, X, y, h=1e-5):
             i = i + 1
 
         max_error = max(errors) if errors else 0
+        overall_max = max(overall_max, max_error)
         avg_error = sum(errors) / len(errors) if errors else 0
 
         print(f"  Weights: max_error={max_error:.2e}, avg_error={avg_error:.2e}")
@@ -61,18 +64,4 @@ def gradient_check(model, loss_fn, X, y, h=1e-5):
         layer_idx = layer_idx + 1
 
     print("\nGradient check complete.")
-
-
-if __name__ == "__main__":
-    import numpy as np
-    from neural_network import NeuralNetwork
-    from losses import Loss_CategoricalCrossentropy
-    from data import create_spiral_data
-
-    np.random.seed(42)
-
-    X, y = create_spiral_data(samples=10, classes=3)
-    model = NeuralNetwork([2, 8, 3])
-    loss_fn = Loss_CategoricalCrossentropy()
-
-    gradient_check(model, loss_fn, X, y, h=1e-5)
+    return overall_max

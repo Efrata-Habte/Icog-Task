@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drybean-classifier"
+version = "0.1.0"
+description = "A NumPy neural network that classifies seven dry bean varieties."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+    "pandas>=1.3",
+    "scikit-learn>=0.24",
+    "openpyxl>=3.0",
+]
+
+[project.optional-dependencies]
+dashboard = ["matplotlib>=3.4", "flask>=2.0", "plotly>=5.0"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+drybean-train = "drybean.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["drybean*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
