@@ -64,4 +64,4 @@ Typical results (Adam, lr 0.01, two hidden layers):
 - He initialization, weights shaped `(n_inputs, n_neurons)`, batch dimension first.
 - Softmax and cross-entropy are combined, so the logit gradient is `(y_pred - y_one_hot) / batch_size`.
 - Mini-batches are reshuffled every epoch.
-- The code uses explicit loops and plain NumPy on purpose, so each step is easy to follow.
+- The code uses explicit loops and plain NumPy on purpose, so each step is clear to follow.
