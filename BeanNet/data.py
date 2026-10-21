@@ -13,8 +13,8 @@ def create_spiral_data(samples, classes):
         r = np.linspace(0.0, 1.0, samples)
         t = np.linspace(c * 4, (c + 1) * 4, samples) + np.random.randn(samples) * 0.2
 
-        X[ix_start:ix_end, 0] = r * np.sin(t * 2.0 * np.pi)
-        X[ix_start:ix_end, 1] = r * np.cos(t * 2.0 * np.pi)
+        X[ix_start:ix_end, 0] = r * np.sin(t * 2.5)
+        X[ix_start:ix_end, 1] = r * np.cos(t * 2.5)
         y[ix_start:ix_end] = c
 
         c = c + 1
