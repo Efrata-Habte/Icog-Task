@@ -1,105 +1,67 @@
-# Neural Network Lab - Minimum Working Version
+# BeanNet: A Neural Network From Scratch, Watched Live
 
-A simple neural network built from scratch using NumPy for classifying the UCI Dry Bean dataset and visualizing the learning process.
+A neural network written in plain NumPy, with no deep-learning framework. It learns to classify seven dry bean varieties and to untangle a 3-class spiral, and a dark-mode dashboard lets you watch loss and accuracy change as it trains.
 
-## Files
+## Project layout
 
-### Core Components
-- **neural_network_new.py** - Layer_Dense (forward/backward), NeuralNetwork, and activations (ReLU, Softmax, Sigmoid, Tanh)
-- **losses_new.py** - Categorical Cross-Entropy loss
-- **optimizer_new.py** - SGD (with optional momentum) and Adam optimizers
-- **data_new.py** - Spiral data generator and Dry Bean dataset loader
+All code is in `BeanNet/`.
 
-### Training and Evaluation
-- **train_new.py** - Mini-batch training loop with history tracking
-- **gradient_check_new.py** - Numerical vs analytical gradient comparison
+| File | Purpose |
+|---|---|
+| `neural_network.py` | Dense layers, ReLU / Softmax / Sigmoid / Tanh, `NeuralNetwork` |
+| `losses.py` | Categorical cross-entropy |
+| `optimizer.py` | SGD (with momentum) and Adam |
+| `data.py` | Spiral generator and Dry Bean loader (stratified 70/15/15 split) |
+| `train.py` | Mini-batch training loop and evaluation |
+| `visualize.py`, `weights.py`, `predictions.py` | Plots, weight export, per-class metrics |
+| `gradient_check.py` | Numerical vs analytical gradient check |
+| `single_neuron_gd.py` | Step-by-step forward/backward demo on a tiny network |
+| `experiments_complete.py` | Architecture and optimizer comparisons |
+| `main_complete.py` | Full pipeline: trains both datasets, saves figures |
+| `dashboard_darkmode.py` | Flask dashboard with live loss, accuracy and charts |
 
-### Demos and Experiments
-- **single_neuron_gd_new.py** - 3-layer, 1-neuron per layer demo with step-by-step math
-- **experiments_new.py** - Architecture and optimizer comparisons
-- **visualize_new.py** - Plotting functions for training curves, confusion matrix, weights, architecture
+## Setup
 
-### Main Entry Points
-- **main_new.py** - Full pipeline: trains on spiral, trains on Dry Bean, saves visualizations
-- **test_spiral_new.py** - Quick test of forward pass on spiral data
-- **test_training_new.py** - Quick test of training loop with backprop
-
-## Quick Start
-
-### Test Forward Pass
 ```bash
-python test_spiral_new.py
-```
-Expected output: Loss ≈ 1.10, Accuracy ≈ 0.33
-
-### Test Training Loop
-```bash
-python test_training_new.py
-```
-Expected: Loss decreases, accuracy increases
-
-### Run Single Neuron Demo
-```bash
-python single_neuron_gd_new.py
-```
-Shows step-by-step forward and backward pass for a tiny 3-1-1-1 network
-
-### Run Full Pipeline
-```bash
-python main_new.py
-```
-Trains on spiral and Dry Bean datasets, saves figures to `figures/` directory
-
-### Run Experiments
-```bash
-python experiments_new.py
-```
-Compares different architectures and optimizers
-
-## Design Decisions
-
-**Weight Initialization:** He initialization - `randn(n_in, n_out) * sqrt(2 / n_in)`
-
-**Weights Shape:** `(n_inputs, n_neurons)` - forward pass is `inputs @ weights + biases`
-
-**Batch Dimension:** Always first - `(batch_size, features)`
-
-**Combined Softmax + Cross-Entropy:** Gradient w.r.t logits is `(y_pred - y_one_hot) / batch_size`
-
-**Backward Loop:** Reverses forward loop - works for any number of layers
-
-**Loss:** Mean over batch, mini-batches reshuffled each epoch
-
-**Preprocessing:** Stratified split → fit StandardScaler on train only → transform all
-
-## Reference Results
-
-### Spiral (100 samples × 3 classes)
-- Untrained: loss ≈ 1.10, accuracy ≈ 0.33
-- `[2, 64, 3]` + Adam (lr=0.01, 1000 epochs): ≈ 83% accuracy
-- `[2, 64, 64, 64, 3]` + Adam (lr=0.01, 1000 epochs): ≈ 99% accuracy
-- `[2, 64, 3]` + SGD (lr=1.0, 10000 epochs): ≈ 72% accuracy
-
-## Code Style
-
-- No list comprehensions - all loops are explicit
-- Simple expressions - no fancy NumPy tricks
-- Clear variable names
-- Comments for key operations
-
-## Requirements
-
-- numpy
-- pandas
-- matplotlib
-- scikit-learn
-- openpyxl (for reading Excel files)
-
-Install with:
-```bash
-pip install numpy pandas matplotlib scikit-learn openpyxl
+cd BeanNet
+pip install -r requirements.txt
+pip install flask plotly      # dashboard only
 ```
 
-## Structure
+Run everything from inside `BeanNet/`, because the dataset path (`data/Dry_Bean_Dataset.xlsx`) is relative.
 
-Files are named with `_new` suffix to distinguish from the original Parts 1-4 code. Copy to a new folder and rename without `_new` to use.
+## Usage
+
+```bash
+python main_complete.py         # train on spiral + Dry Bean, save figures
+python experiments_complete.py  # compare architectures and optimizers
+python gradient_check.py        # verify backprop
+python single_neuron_gd.py      # tiny worked example
+python dashboard_darkmode.py    # dashboard at http://127.0.0.1:5000
+```
+
+## Dashboard
+
+Pick the layers, learning rate and epochs, then click **Train Network**. While it trains you get:
+- live cards for epoch, loss, accuracy, and test (and validation) loss and accuracy
+- loss and accuracy curves that update every epoch
+- the architecture diagram, weight heatmaps and, for the spiral, the decision boundary
+
+## Data and evaluation
+
+- **Dry Bean:** stratified 70% train / 15% validation / 15% test. The scaler is fit on the training split only.
+- **Spiral:** 300 training points and a separate freshly generated 300-point test set.
+
+Typical results (Adam, lr 0.01, two hidden layers):
+
+| Dataset | Train acc | Test acc |
+|---|---|---|
+| Spiral (200 epochs) | ~95% | ~87% |
+| Dry Bean (50 epochs) | ~95% | ~92% |
+
+## Design notes
+
+- He initialization, weights shaped `(n_inputs, n_neurons)`, batch dimension first.
+- Softmax and cross-entropy are combined, so the logit gradient is `(y_pred - y_one_hot) / batch_size`.
+- Mini-batches are reshuffled every epoch.
+- The code uses explicit loops and plain NumPy on purpose, so each step is easy to follow.
