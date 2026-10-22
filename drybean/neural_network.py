@@ -2,7 +2,8 @@ import numpy as np
 
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons):
-        self.weights = np.random.randn(n_inputs, n_neurons) * np.sqrt(2.0 / n_inputs)
+        # (n_inputs, n_neurons) one row per sample no transpose is needed
+        self.weights = np.random.randn(n_inputs, n_neurons) * np.sqrt(2.0 / n_inputs) # He initialization
         self.biases = np.zeros((1, n_neurons))
 
     def forward(self, inputs):
@@ -82,6 +83,8 @@ class NeuralNetwork:
             dvalues[i, true_class] = dvalues[i, true_class] - 1.0
             i = i + 1
         dvalues = dvalues / batch_size
+
+        # dvalues : the gradient of the loss wrt a layers output
 
         i = len(self.layers) - 1
         while i >= 0:
