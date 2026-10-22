@@ -19,6 +19,8 @@ def build_parser():
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--patience', type=int, default=20,
+                        help='stop after this many epochs without val_loss improvement (0 disables early stopping)')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--save-weights', help='write the trained weights to this .npz file')
     return parser
@@ -42,7 +44,8 @@ def main(argv=None):
     loss_fn = Loss_CategoricalCrossentropy()
 
     train_mini_batch(model, optimizer, loss_fn, X_train, y_train, X_val, y_val,
-                     epochs=args.epochs, batch_size=args.batch_size)
+                     epochs=args.epochs, batch_size=args.batch_size,
+                     patience=args.patience or None)
 
     test_loss, test_acc, y_pred, _ = evaluate(model, loss_fn, X_test, y_test)
     print(f"\nTest loss: {test_loss:.4f}")

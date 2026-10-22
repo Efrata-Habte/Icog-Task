@@ -43,7 +43,9 @@ python -m examples.train_with_plots     # spiral + Dry Bean runs with saved figu
 
 ## Data and evaluation
 
-Dry Bean is split with stratification into 70% train, 15% validation and 15% test, and the scaler is fit on the training split only. The dashboard shows live train, validation and test loss and accuracy.
+Dry Bean is split with stratification into 70% train, 15% validation and 15% test, and the scaler is fit on the training split only. The dashboard shows live train and validation loss and accuracy. The test set is scored once, after training finishes, and that final result is shown on its own cards.
+
+Training uses early stopping on validation loss: it stops after 20 epochs without improvement and restores the best weights (`--patience 0` turns it off in the CLI). The dashboard stops the same way and says so when it finishes.
 
 The spiral (`examples/spiral.py`) is a synthetic 3-class problem used as a sanity check that the network can learn non-linear boundaries. It is not part of the classifier.
 

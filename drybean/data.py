@@ -21,8 +21,8 @@ def load_dry_bean(filepath):
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp)
 
-    scaler = StandardScaler()
-    scaler.fit(X_train)
+    scaler = StandardScaler() # standardization
+    scaler.fit(X_train) # computes each features mean and sd from the training set only to prevent data leakage
     X_train = scaler.transform(X_train)
     X_val = scaler.transform(X_val)
     X_test = scaler.transform(X_test)

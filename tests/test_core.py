@@ -49,14 +49,15 @@ def test_training_learns_separable_data():
     assert 'val_loss' not in history
 
 
-def test_history_tracks_optional_splits():
+def test_history_tracks_train_and_val_only():
     np.random.seed(0)
     X, y = make_blobs()
     history = train_mini_batch(NeuralNetwork([4, 8, 3]), Optimizer_Adam(), Loss_CategoricalCrossentropy(),
-                               X, y, X, y, epochs=2, batch_size=32, X_test=X, y_test=y, verbose=False)
-    for key in ('train', 'val', 'test'):
+                               X, y, X, y, epochs=2, batch_size=32, verbose=False)
+    for key in ('train', 'val'):
         assert len(history[key + '_loss']) == 2
         assert len(history[key + '_acc']) == 2
+    assert not any(key.startswith('test') for key in history)
 
 
 def test_weights_round_trip(tmp_path):
@@ -78,3 +79,28 @@ def test_dry_bean_split_is_stratified_and_scaled():
     assert abs(len(y_test) / total - 0.15) < 0.01
     assert len(class_names) == 7
     assert np.allclose(X_train.mean(axis=0), 0.0, atol=1e-6)
+
+
+def test_early_stopping_stops_and_restores_best_weights():
+    np.random.seed(0)
+    rng = np.random.RandomState(1)
+    # random labels: the network can only memorize the training set, so val_loss turns upward
+    X_train, y_train = rng.randn(60, 4), rng.randint(0, 3, 60)
+    X_val, y_val = rng.randn(60, 4), rng.randint(0, 3, 60)
+    loss_fn = Loss_CategoricalCrossentropy()
+    model = NeuralNetwork([4, 64, 3])
+
+    history = train_mini_batch(model, Optimizer_Adam(learning_rate=0.01), loss_fn, X_train, y_train,
+                               X_val, y_val, epochs=300, batch_size=20, verbose=False, patience=5)
+
+    assert len(history['val_loss']) < 300
+    restored_val_loss = loss_fn.calculate(model.forward(X_val), y_val)
+    assert restored_val_loss == pytest.approx(min(history['val_loss']))
+
+
+def test_no_early_stopping_by_default():
+    np.random.seed(0)
+    X, y = make_blobs()
+    history = train_mini_batch(NeuralNetwork([4, 8, 3]), Optimizer_Adam(), Loss_CategoricalCrossentropy(),
+                               X, y, X, y, epochs=15, batch_size=32, verbose=False)
+    assert len(history['val_loss']) == 15

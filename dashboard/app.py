@@ -12,7 +12,7 @@ from drybean.neural_network import NeuralNetwork
 from drybean.losses import Loss_CategoricalCrossentropy
 from drybean.optimizer import Optimizer_Adam
 from drybean.data import load_dry_bean
-from drybean.train import train_mini_batch
+from drybean.train import train_mini_batch, evaluate
 from examples.spiral import create_spiral_data
 from pathlib import Path
 
@@ -20,6 +20,9 @@ DATA_PATH = str(Path(__file__).resolve().parent.parent / 'data' / 'Dry_Bean_Data
 
 # 1000 points per class: with only 100 the network memorizes noise (train-test gap of ~9 points)
 SPIRAL_TRAIN_SAMPLES = 1000
+
+# stop when validation loss has not improved for this many epochs, then restore the best weights
+EARLY_STOPPING_PATIENCE = 20
 
 app = Flask(__name__)
 
@@ -774,6 +777,17 @@ HTML_TEMPLATE = """
         updateSpiralLayers();
         updateBeanLayers();
 
+        // test score, filled in once per run after training has finished
+        const finalTest = {spiral: null, bean: null};
+
+        function completionMessage(data) {
+            let msg = `Training complete! Test Accuracy: ${(data.test_acc * 100).toFixed(2)}%`;
+            if (data.epochs_run < data.epochs_requested) {
+                msg += ` Stopped early at epoch ${data.epochs_run}; restored best epoch ${data.best_epoch} (lowest validation loss).`;
+            }
+            return msg;
+        }
+
         function renderLiveMetrics(prefix, m) {
             const box = document.getElementById(prefix + '_metrics');
             if (!box || !m) return;
@@ -782,7 +796,10 @@ HTML_TEMPLATE = """
             if (m.val_loss !== undefined) {
                 cards.push(['Val Loss', fmt(m.val_loss, 4)], ['Val Accuracy', fmt(m.val_acc * 100, 2) + '%']);
             }
-            cards.push(['Test Loss', fmt(m.test_loss, 4)], ['Test Accuracy', fmt(m.test_acc * 100, 2) + '%']);
+            const final = finalTest[prefix];
+            if (final) {
+                cards.push(['Final Test Loss', fmt(final.loss, 4)], ['Final Test Accuracy', fmt(final.acc * 100, 2) + '%']);
+            }
             box.innerHTML = cards.map(c => `<div class="metric-card"><div class="metric-label">${c[0]}</div><div class="metric-value">${c[1]}</div></div>`).join('');
             box.classList.add('active');
         }
@@ -826,6 +843,7 @@ HTML_TEMPLATE = """
 
             const btn = document.getElementById('spiral_train_btn');
             btn.disabled = true;
+            finalTest.spiral = null;
 
             const status = document.getElementById('spiral_status');
             status.style.display = 'block';
@@ -859,7 +877,8 @@ HTML_TEMPLATE = """
 
                 status.classList.remove('training');
                 status.classList.add('complete');
-                status.textContent = `Training complete! Test Accuracy: ${(data.test_acc * 100).toFixed(2)}%`;
+                finalTest.spiral = {loss: data.test_loss, acc: data.test_acc};
+                status.textContent = completionMessage(data);
 
                 btn.disabled = false;
             });
@@ -911,6 +930,7 @@ HTML_TEMPLATE = """
 
             const btn = document.getElementById('bean_train_btn');
             btn.disabled = true;
+            finalTest.bean = null;
 
             const status = document.getElementById('bean_status');
             status.style.display = 'block';
@@ -940,7 +960,8 @@ HTML_TEMPLATE = """
 
                 status.classList.remove('training');
                 status.classList.add('complete');
-                status.textContent = `Training complete! Test Accuracy: ${data.test_acc.toFixed(4)}`;
+                finalTest.bean = {loss: data.test_loss, acc: data.test_acc};
+                status.textContent = completionMessage(data);
 
                 btn.disabled = false;
             });
@@ -969,7 +990,7 @@ def _line_plot(title, ylabel, epochs_arr, series):
     fig.update_layout(title=title, xaxis_title='Epoch', yaxis_title=ylabel, height=400, plot_bgcolor='#1a1a1a', paper_bgcolor='#2a2a2a', font=dict(color='#d4af37'))
     return json.dumps(fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
 
-SPLIT_STYLE = [('train', 'Train', '#d4af37'), ('val', 'Val', '#888888'), ('test', 'Test', '#4fc3f7')]
+SPLIT_STYLE = [('train', 'Train', '#d4af37'), ('val', 'Val', '#888888')]
 
 @app.route('/training_progress/<dataset>', methods=['GET'])
 def get_training_progress(dataset):
@@ -1018,13 +1039,14 @@ def train_spiral():
 
     np.random.seed(42)
     X, y = create_spiral_data(samples=SPIRAL_TRAIN_SAMPLES, classes=3)
+    X_val, y_val = create_spiral_data(samples=100, classes=3)
     X_test, y_test = create_spiral_data(samples=100, classes=3)
 
     model = NeuralNetwork(layer_sizes)
     optimizer = Optimizer_Adam(learning_rate=lr)
     loss_fn = Loss_CategoricalCrossentropy()
 
-    history = {'train_loss': [], 'train_acc': [], 'test_loss': [], 'test_acc': []}
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
 
     training_state['spiral']['is_training'] = True
     training_state['spiral']['history'] = history
@@ -1033,18 +1055,25 @@ def train_spiral():
     training_state['spiral']['y'] = y
 
     try:
-        train_mini_batch(model, optimizer, loss_fn, X, y, epochs=epochs, batch_size=32,
-                         X_test=X_test, y_test=y_test, history=history, verbose=False)
+        train_mini_batch(model, optimizer, loss_fn, X, y, X_val, y_val, epochs=epochs, batch_size=32,
+                         history=history, verbose=False, patience=EARLY_STOPPING_PATIENCE)
     finally:
         training_state['spiral']['is_training'] = False
 
+    # the test set is scored once, after training is over
+    test_loss, test_acc, _, _ = evaluate(model, loss_fn, X_test, y_test)
+    epochs_run = len(history['val_loss'])
 
     arch_img = plot_architecture(layer_sizes)
     boundary_img = plot_decision_boundary(model, X, y)
     weights_img = plot_weights_heatmap(model)
 
     return jsonify({
-        'test_acc': history['test_acc'][-1],
+        'test_loss': float(test_loss),
+        'test_acc': float(test_acc),
+        'epochs_run': epochs_run,
+        'epochs_requested': epochs,
+        'best_epoch': int(np.argmin(history['val_loss'])) + 1,
         'arch_img': arch_img,
         'boundary_img': boundary_img,
         'weights_img': weights_img,
@@ -1061,7 +1090,7 @@ def train_bean():
 
     np.random.seed(42)
 
-    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': [], 'test_loss': [], 'test_acc': []}
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
     training_state['bean']['is_training'] = True
     training_state['bean']['history'] = history
 
@@ -1081,14 +1110,14 @@ def train_bean():
 
     try:
         train_mini_batch(model, optimizer, loss_fn, X_train, y_train, X_val, y_val,
-                         epochs=50, batch_size=64, X_test=X_test, y_test=y_test,
-                         history=history, verbose=False)
+                         epochs=50, batch_size=64,
+                         history=history, verbose=False, patience=EARLY_STOPPING_PATIENCE)
     finally:
         training_state['bean']['is_training'] = False
 
-    y_pred_test = model.forward(X_test)
-    test_loss = loss_fn.calculate(y_pred_test, y_test)
-    test_acc = np.mean(np.argmax(y_pred_test, axis=1) == y_test)
+    # the test set is scored once, after training is over
+    test_loss, test_acc, _, _ = evaluate(model, loss_fn, X_test, y_test)
+    epochs_run = len(history['val_loss'])
 
     arch_img = plot_architecture(layer_sizes)
     weights_img = plot_weights_heatmap(model)
@@ -1096,7 +1125,11 @@ def train_bean():
     return jsonify({
         'arch_img': arch_img,
         'weights_img': weights_img,
+        'test_loss': float(test_loss),
         'test_acc': float(test_acc),
+        'epochs_run': epochs_run,
+        'epochs_requested': 50,
+        'best_epoch': int(np.argmin(history['val_loss'])) + 1,
         'complete': True
     })
 
