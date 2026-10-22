@@ -7,7 +7,7 @@ A neural network written in plain NumPy, with no deep-learning framework, that c
 ```
 drybean/       core package: model, losses, optimizers, data, training, metrics, CLI
 dashboard/     Flask dashboard and plotting (imports drybean; the core never imports it)
-examples/      single-neuron walkthrough, spiral sanity check, experiments, plotted training run
+examples/      single-neuron walkthrough and the spiral sanity-check data
 tests/         gradient check and unit tests
 data/          Dry_Bean_Dataset.xlsx (tracked in git; DryBeanDataset/ holds the original .arff/.txt/.xlsx)
 ```
@@ -33,12 +33,10 @@ python -m pytest                            # gradient check and unit tests (8 t
 
 With `pip install -e .` the training command is also available as `drybean-train`.
 
-Examples:
+Example:
 
 ```bash
 python -m examples.single_neuron_gd     # step-by-step forward/backward on a tiny network
-python -m examples.experiments          # architecture and optimizer comparisons
-python -m examples.train_with_plots     # spiral + Dry Bean runs with saved figures (written to figures/, which is gitignored)
 ```
 
 ## Data and evaluation
@@ -50,8 +48,6 @@ Training uses early stopping on validation loss: it stops after 20 epochs withou
 The spiral (`examples/spiral.py`) is a synthetic 3-class problem used as a sanity check that the network can learn non-linear boundaries. It is not part of the classifier. The dashboard's spiral tab trains on 1000 points per class, validates on a separate fresh set of 100 per class, and scores a third fresh set of 100 per class once at the end (the generator adds new noise on every call). With only 100 points per class the network memorizes the noise.
 
 The dashboard's Dry Bean tab trains for at most 50 epochs; the CLI defaults to 100.
-
-`examples/train_with_plots.py` and `examples/experiments.py` predate this setup: they use 100 points per class, validate on the training data itself, and have no early stopping. Their spiral accuracies are training-set numbers, not held-out ones, and the three boundary plots in `train_with_plots.py` are all drawn after training, so they show the same final model.
 
 Typical results, single runs with seed 42 and Adam:
 
