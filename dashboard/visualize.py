@@ -66,17 +66,18 @@ def plot_weight_heatmap(weights, layer_name, feature_names=None,
                        save_path='figures/weights_heatmap.png'):
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    im = ax.imshow(weights.T, cmap='RdBu_r', aspect='auto')
+    limit = float(np.abs(weights).max())
+    im = ax.imshow(weights.T, cmap='RdBu_r', vmin=-limit, vmax=limit, aspect='auto')
 
     if feature_names is not None:
-        ax.set_yticks(np.arange(len(feature_names)))
-        ax.set_yticklabels(feature_names, fontsize=8)
+        ax.set_xticks(np.arange(len(feature_names)))
+        ax.set_xticklabels(feature_names, rotation=60, ha='right', fontsize=8)
 
-    ax.set_xlabel('Input Features')
+    ax.set_xlabel('Input features')
     ax.set_ylabel('Neurons')
     ax.set_title(f'Weights: {layer_name}')
 
-    plt.colorbar(im, ax=ax)
+    plt.colorbar(im, ax=ax, label='Weight (blue negative, red positive)')
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
 

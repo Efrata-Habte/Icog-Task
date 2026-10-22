@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from drybean.neural_network import NeuralNetwork
 from drybean.losses import Loss_CategoricalCrossentropy
 from drybean.optimizer import Optimizer_Adam, Optimizer_SGD
-from drybean.data import load_dry_bean
+from drybean.data import load_dry_bean, dry_bean_feature_names
 from examples.spiral import create_spiral_data
 from drybean.train import train_mini_batch, evaluate
 from dashboard.visualize import (create_figures_dir, plot_training_curves,
@@ -84,7 +84,7 @@ try:
 
     weights_layer0 = get_layer_weights(model_bean, 0)
     if weights_layer0 is not None:
-        feature_names = [f"Feature {i}" for i in range(16)]
+        feature_names = dry_bean_feature_names(DATA_PATH)
         plot_weight_heatmap(weights_layer0, "Layer 0 (Input → Hidden)",
                            feature_names=feature_names,
                            save_path='figures/bean_weights_layer0.png')

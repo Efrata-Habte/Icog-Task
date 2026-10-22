@@ -11,7 +11,7 @@ import base64
 from drybean.neural_network import NeuralNetwork
 from drybean.losses import Loss_CategoricalCrossentropy
 from drybean.optimizer import Optimizer_Adam
-from drybean.data import load_dry_bean
+from drybean.data import load_dry_bean, dry_bean_feature_names
 from drybean.train import train_mini_batch, evaluate
 from examples.spiral import create_spiral_data
 from pathlib import Path
@@ -79,7 +79,7 @@ def plot_architecture(layer_sizes):
 
     return fig_to_base64(fig)
 
-def plot_weights_heatmap(model):
+def plot_weights_heatmap(model, feature_names=None):
     weight_images = []
     layer_idx = 0
 
@@ -92,15 +92,25 @@ def plot_weights_heatmap(model):
             fig, ax = plt.subplots(figsize=(10, 6), facecolor='#1a1a1a')
             ax.set_facecolor('#1a1a1a')
 
-            im = ax.imshow(weights.T, cmap='gray', aspect='auto')
-            ax.set_xlabel('Input Features', color='#d4af37', fontsize=11)
-            ax.set_ylabel('Neurons', color='#d4af37', fontsize=11)
+            # diverging scale centred on 0: red = positive weight, blue = negative weight
+            limit = float(np.abs(weights).max())
+            im = ax.imshow(weights.T, cmap='RdBu_r', vmin=-limit, vmax=limit, aspect='auto')
+
+            if layer_idx == 0 and feature_names is not None:
+                ax.set_xticks(np.arange(len(feature_names)))
+                ax.set_xticklabels(feature_names, rotation=60, ha='right', fontsize=9)
+                ax.set_xlabel('Input features', color='#d4af37', fontsize=11)
+            else:
+                ax.set_xlabel('Neurons of the previous layer', color='#d4af37', fontsize=11)
+            ax.set_ylabel('Neurons in this layer', color='#d4af37', fontsize=11)
             ax.set_title(f'Layer {layer_idx} Weight Heatmap ({weights.shape[0]} inputs → {weights.shape[1]} neurons)',
                         fontsize=14, fontweight='bold', color='#d4af37', pad=20)
             ax.tick_params(colors='#d4af37')
 
             cbar = plt.colorbar(im, ax=ax)
+            cbar.set_label('Weight (blue negative, red positive)', color='#d4af37')
             cbar.ax.tick_params(colors='#d4af37')
+            fig.tight_layout()
 
             weight_images.append(fig_to_base64(fig))
             layer_idx = layer_idx + 1
@@ -1066,7 +1076,7 @@ def train_spiral():
 
     arch_img = plot_architecture(layer_sizes)
     boundary_img = plot_decision_boundary(model, X, y)
-    weights_img = plot_weights_heatmap(model)
+    weights_img = plot_weights_heatmap(model, feature_names=['x', 'y'])
 
     return jsonify({
         'test_loss': float(test_loss),
@@ -1120,7 +1130,7 @@ def train_bean():
     epochs_run = len(history['val_loss'])
 
     arch_img = plot_architecture(layer_sizes)
-    weights_img = plot_weights_heatmap(model)
+    weights_img = plot_weights_heatmap(model, feature_names=dry_bean_feature_names(DATA_PATH))
 
     return jsonify({
         'arch_img': arch_img,

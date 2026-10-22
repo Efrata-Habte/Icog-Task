@@ -28,3 +28,10 @@ def load_dry_bean(filepath):
     X_test = scaler.transform(X_test)
 
     return X_train, X_val, X_test, y_train, y_val, y_test, class_names
+
+
+def dry_bean_feature_names(filepath):
+    import pandas as pd
+
+    columns = pd.read_excel(filepath, nrows=0).columns
+    return list(columns[:-1])
